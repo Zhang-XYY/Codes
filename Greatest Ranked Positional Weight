@@ -1,0 +1,18 @@
+priority_weights = zeros(1, length(jobs{1}.topology) + length(jobs{2}.topology));
+for j = 1:length(jobs)
+    job = jobs{j};
+    for k = 1:length(job.topology)
+        op = job.topology(k);
+        op_id = sprintf('J%dO%d', job.id, op.id);
+        task_duration = min(op.time);  % Take the minimum duration
+        successors_durations = []
+        for suc = op.sucessors
+            successor_op = job.topology(suc);  % Get the successor operation
+            successor_duration = min(successor_op.time);
+            successors_durations = [successors_durations, successor_duration];
+        end
+        % Calculate priority weight
+        weight = task_duration + sum(successors_durations);
+        priority_weights(k) = weight;
+    end
+end
