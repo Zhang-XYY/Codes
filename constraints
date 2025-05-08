@@ -1,24 +1,82 @@
-
-    constraints = [];
-    taskAssignmentConstraints = sum(x, 2) == 1;  % For each task i, sum(x(i,:)) == 1
-    constraints = [constraints; taskAssignmentConstraints];  % Add task assignment constraints
-    machineAssignmentConstraints = sum(x, 1) <= 1;  % For each machine j, sum(x(:,j)) <= 1
-    constraints = [constraints; machineAssignmentConstraints];  % Add machine assignment constraints
-    precedenceConstraints = [];
-    for i = 1:numJobs
-        job = jsonData.jobs(i);  % Access job data directly from jsonData
+constraints = []; 
+taskAssignmentConstraints = sum(x, 2) == 1;  % For each task i, sum(x(i,:)) == 1
+constraints = [constraints; taskAssignmentConstraints];  % Add task assignment constraints
+machineAssignmentConstraints = sum(x, 1) <= 1;  % For each machine j, sum(x(:,j)) <= 1
+constraints = [constraints; machineAssignmentConstraints];  % Add machine assignment constraints
+precedenceConstraints = [];
+for i = 1:numJobs
+    job = jsonData.jobs(i);  % Access job data directly from jsonData
+    for k = 1:length(job.topology)
+        op = job.topology(k);
+        op_id = sprintf('J%dO%d', job.id, op.id);
+        startPlaceIdx = find(strcmp(placeLabels, [op_id, '_start']));
+        finishPlaceIdx = find(strcmp(placeLabels, [op_id, '_finish']));
+        for sucIdx = 1:length(op.sucessors)
+            sucId = op.sucessors(sucIdx);
+            sucOp = job.topology(sucId);  % Get the successor operation
+            sucOp_id = sprintf('J%dO%d', job.id, sucOp.id);
+            finishPlaceIdx_suc = find(strcmp(placeLabels, [sucOp_id, '_finish']));
+            % Precedence constraint: C(i) >= C(sucId) + B(startPlaceIdx, finishPlaceIdx_suc)
+            precedenceConstraints = [precedenceConstraints; C(i) >= C(sucId) + B(startPlaceIdx, finishPlaceIdx_suc)];
+        end
+    end
+end
+constraints = [constraints; precedenceConstraints];  % Add precedence constraints
+intraJobConstraints = [];
+for i = 1:numJobs
+    job = jsonData.jobs(i);  % Access job data directly from jsonData
+    for k = 1:length(job.topology)
+        op = job.topology(k);
+        op_id = sprintf('J%dO%d', job.id, op.id);
+        startPlaceIdx = find(strcmp(placeLabels, [op_id, '_start']));
+        finishPlaceIdx = find(strcmp(placeLabels, [op_id, '_finish']));
+        for sucIdx = 1:length(op.sucessors)
+            sucId = op.sucessors(sucIdx);
+            sucOp = job.topology(sucId);  % Get the successor operation
+            sucOp_id = sprintf('J%dO%d', job.id, sucOp.id);
+            finishPlaceIdx_suc = find(strcmp(placeLabels, [sucOp_id, '_finish']));
+            intraJobConstraints = [intraJobConstraints; C(i) >= C(sucId) + B(startPlaceIdx, finishPlaceIdx_suc)];
+        end
+    end
+end
+constraints = [constraints; intraJobConstraints];
+nonPreemptiveConstraints = [];
+constraints = [constraints; nonPreemptiveConstraints];  % Add non-preemptive execution constraints
+taskToMachineConstraints = [];
+for j = 1:length(jobs)
+    job = jobs(j);
+    for k = 1:length(job.topology)
+        op = job.topology(k);
+        op_id = sprintf('J%dO%d', job.id, op.id);
+        startPlaceIdx = find(strcmp(placeLabels, [op_id, '_start']));
+        for r = 1:length(op.resources)
+            machine = op.resources(r);
+            transName = sprintf('%s_M%d_exec', op_id, machine);
+            transIdx = transitionMap(transName);
+            taskToMachineConstraints = [taskToMachineConstraints; x(startPlaceIdx, transIdx) == 1];
+        end
+    end
+end
+constraints = [constraints; taskToMachineConstraints];  % Add task-to-machine compatibility constraints
+jobExecutionExclusivityConstraints = [];
+for m = 1:numTrans
+    machineTrans = transitionLabels{m};
+    for j = 1:length(jobs)
+        job = jobs(j);
         for k = 1:length(job.topology)
             op = job.topology(k);
             op_id = sprintf('J%dO%d', job.id, op.id);
-            startPlaceIdx = find(strcmp(placeLabels, [op_id, '_start']));
-            finishPlaceIdx = find(strcmp(placeLabels, [op_id, '_finish']));
-            for sucIdx = 1:length(op.sucessors)
-                sucId = op.sucessors(sucIdx);
-                sucOp = job.topology(sucId);  % Get the successor operation
-                sucOp_id = sprintf('J%dO%d', job.id, sucOp.id);
-                finishPlaceIdx_suc = find(strcmp(placeLabels, [sucOp_id, '_finish']))
-                precedenceConstraints = [precedenceConstraints; C(i) >= C(sucId) + B(startPlaceIdx, finishPlaceIdx_suc)];
+            for r = 1:length(op.resources)
+                if strcmp(machineTrans, sprintf('%s_M%d_exec', op_id, op.resources(r)))
+                    for otherTransIdx = 1:numTrans
+                        if m ~= otherTransIdx && strcmp(transitionLabels{otherTransIdx}, sprintf('%s_M%d_exec', op_id, op.resources(r)))
+                            jobExecutionExclusivityConstraints = [jobExecutionExclusivityConstraints; A(m, otherTransIdx) == 0];  % 排他性
+                        end
+                    end
+                end
             end
         end
     end
-    constraints = [constraints; precedenceConstraints]; 
+end
+constraints = [constraints; jobExecutionExclusivityConstraints];  
+
