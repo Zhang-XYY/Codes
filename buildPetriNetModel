@@ -1,0 +1,63 @@
+function [A, B, x0, placeLabels, transitionLabels] = buildPetriNetModelFromJSON(jsonFilePath) 
+      filename = 'sopsN.json';
+jsonData = jsondecode(fileread(filename));
+    jobs = jsonData.jobs;
+    placeLabels = {};
+    transitionLabels = {};
+    placeIdx = 1;
+    transitionIdx = 1;    
+    placeMap = containers.Map;
+    transitionMap = containers.Map;
+    for j = 1:length(jobs)
+        job = jobs(j);
+        for k = 1:length(job.topology)
+            op = job.topology(k);
+            op_id = sprintf('J%dO%d', job.id, op.id)
+            startPlace = [op_id, '_start'];
+            finishPlace = [op_id, '_finish'];
+            placeLabels{placeIdx} = startPlace; placeMap(startPlace) = placeIdx; placeIdx = placeIdx + 1;
+            placeLabels{placeIdx} = finishPlace; placeMap(finishPlace) = placeIdx; placeIdx = placeIdx + 1          
+            for r = 1:length(op.resources)
+                machine = op.resources(r);
+                transName = sprintf('%s_M%d_exec', op_id, machine);
+                transitionLabels{transitionIdx} = transName;
+                transitionMap(transName) = transitionIdx;
+                transitionIdx = transitionIdx + 1;
+            end
+        end
+    end
+    numPlaces = length(placeLabels);
+    numTrans = length(transitionLabels);
+    A = eye(numPlaces); 
+    B = zeros(numPlaces, numTrans); 
+    x0 = zeros(numPlaces, 1);
+    for j = 1:length(jobs)
+        job = jobs(j);
+        for k = 1:length(job.topology)
+            op = job.topology(k);
+            op_id = sprintf('J%dO%d', job.id, op.id);
+            startPlaceIdx = placeMap([op_id, '_start']);
+            finishPlaceIdx = placeMap([op_id, '_finish']);
+            for r = 1:length(op.resources)
+                machine = op.resources(r);
+                transName = sprintf('%s_M%d_exec', op_id, machine);
+                transIdx = transitionMap(transName);
+                B(startPlaceIdx, transIdx) = -1;
+                B(finishPlaceIdx, transIdx) = 1;
+            end
+        end
+    end
+    for j = 1:length(jobs)
+        job = jobs(j);
+        for k = 1:length(job.topology)
+            op = job.topology(k);
+            op_id = sprintf('J%dO%d', job.id, op.id);
+            startPlaceIdx = placeMap([op_id, '_start']);
+            x0(startPlaceIdx) = 1;
+        end
+    end
+disp('Matrix A (State Transition Matrix):');
+disp(A);
+disp('Matrix B (Control Input Matrix):');
+disp(B);
+end
