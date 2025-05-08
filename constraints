@@ -1,0 +1,24 @@
+
+    constraints = [];
+    taskAssignmentConstraints = sum(x, 2) == 1;  % For each task i, sum(x(i,:)) == 1
+    constraints = [constraints; taskAssignmentConstraints];  % Add task assignment constraints
+    machineAssignmentConstraints = sum(x, 1) <= 1;  % For each machine j, sum(x(:,j)) <= 1
+    constraints = [constraints; machineAssignmentConstraints];  % Add machine assignment constraints
+    precedenceConstraints = [];
+    for i = 1:numJobs
+        job = jsonData.jobs(i);  % Access job data directly from jsonData
+        for k = 1:length(job.topology)
+            op = job.topology(k);
+            op_id = sprintf('J%dO%d', job.id, op.id);
+            startPlaceIdx = find(strcmp(placeLabels, [op_id, '_start']));
+            finishPlaceIdx = find(strcmp(placeLabels, [op_id, '_finish']));
+            for sucIdx = 1:length(op.sucessors)
+                sucId = op.sucessors(sucIdx);
+                sucOp = job.topology(sucId);  % Get the successor operation
+                sucOp_id = sprintf('J%dO%d', job.id, sucOp.id);
+                finishPlaceIdx_suc = find(strcmp(placeLabels, [sucOp_id, '_finish']))
+                precedenceConstraints = [precedenceConstraints; C(i) >= C(sucId) + B(startPlaceIdx, finishPlaceIdx_suc)];
+            end
+        end
+    end
+    constraints = [constraints; precedenceConstraints]; 
