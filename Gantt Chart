@@ -1,0 +1,25 @@
+figure;
+hold on;
+title('Job Scheduling Gantt Chart');
+xlabel('Time');
+ylabel('Resources');
+
+yticks(1:7);
+yticklabels({'M1', 'M2', 'M3', 'M4', 'M5', 'M6', 'M7'});
+
+colors = lines(5);  % 5 jobs
+
+for i = 1:size(taskData, 1)
+    jobID = taskData(i, 1);  % Job ID
+    taskID = taskData(i, 2);  % Task ID
+    machineID = taskData(i, 3);  % Resource ID
+    startTime = taskData(i, 4);  % Start time
+    endTime = taskData(i, 5);    % End time
+
+    rectangle('Position', [startTime, machineID - 0.4, endTime - startTime, 0.8], ...
+              'FaceColor', colors(jobID, :), 'EdgeColor', 'k');
+
+ text(startTime + 0.2, machineID, sprintf('J%d-T%d', jobID, taskID), 'FontSize', 8, 'Color', 'k');
+end
+
+hold off;
